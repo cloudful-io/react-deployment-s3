@@ -1,0 +1,226 @@
+name: Deploy React App to S3 and CloudFront
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1  # Change to your region
+      BUCKET_NAME: cloudful-react-deployment-s3
+      LOG_BUCKET: cloudful-react-deployment-s3-logs
+      CF_COMMENT: cloudful-react-deployment-s3
+      OAC_NAME: "OAC-cloudful-react-deployment-s3"
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+  
+      # Configure AWS Credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      ### --- Check and Create Logging Bucket ---
+      - name: Check if S3 logging bucket exists
+        id: check_log_bucket
+        run: |
+          if aws s3api head-bucket --bucket "$LOG_BUCKET" 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create logging bucket
+        if: steps.check_log_bucket.outputs.exists == 'false'
+        run: |
+          aws s3api create-bucket --bucket "$LOG_BUCKET" --region us-east-1
+          aws s3api put-public-access-block --bucket "$LOG_BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+      - name: Set bucket policy on logging bucket
+        run: |
+          aws s3api put-bucket-policy --bucket "$LOG_BUCKET" --policy "{
+            \"Version\": \"2012-10-17\",
+            \"Statement\": [{
+              \"Effect\": \"Allow\",
+              \"Principal\": {\"Service\": \"s3.amazonaws.com\"},
+              \"Action\": \"s3:PutObject\",
+              \"Resource\": \"arn:aws:s3:::$LOG_BUCKET/*\",
+              \"Condition\": {
+                \"StringEquals\": {
+                  \"aws:SourceAccount\": \"${{ secrets.AWS_ACCOUNT_ID }}\"
+                },
+                \"ArnLike\": {
+                  \"aws:SourceArn\": \"arn:aws:s3:::$BUCKET_NAME\"
+                }
+              }
+            }]
+          }"
+
+      - name: Check if S3 bucket exists
+        id: check_bucket
+        run: |
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket exists"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Bucket does not exist"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create S3 bucket
+        if: steps.check_bucket.outputs.exists == 'false'
+        run: |
+          aws s3api create-bucket \
+            --bucket "$BUCKET_NAME" \
+            --region $AWS_REGION
+            --create-bucket-configuration LocationConstraint="$REGION" \
+            --object-lock-enabled-for-bucket
+          aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
+          aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          aws s3api put-object-lock-configuration \
+            --bucket "$BUCKET_NAME" \
+            --object-lock-configuration '{
+              "ObjectLockEnabled": "Enabled",
+              "Rule": {
+                "DefaultRetention": {
+                    "Mode": "COMPLIANCE",
+                    "Days": 30
+                }
+              }
+            }'
+
+      - name: Check if OAC exists
+        id: check_oac_exists
+        run: |
+          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='$OAC_NAME'].Id" --output text)
+          if [ "$OAC_ID" != "None" ]; then
+            echo "Origin Access Control (OAC) ${OAC_NAME} exists."
+            echo "oac_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Origin Access Control (OAC) does not exist."
+            echo "oac_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create CloudFront OAC if it doesn't exist
+        if: steps.check_oac_exists.outputs.exists == 'false'
+        id: create_oac
+        run: |
+          OAC_ID=$(aws cloudfront create-origin-access-control \
+            --origin-access-control-config '{
+              "Name": "$OAC_NAME",
+              "OriginAccessControlOriginType": "s3",
+              "SigningBehavior": "always",
+              "SigningProtocol": "sigv4"
+            }' \
+            --query 'OriginAccessControl.Id' --output text)
+          echo "OAC ID: $OAC_ID"
+          echo "OAC_ID=$OAC_ID" >> $GITHUB_ENV
+
+      - name: Check if CloudFront distribution exists
+        id: check_cf
+        run: |
+          EXISTING_DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='$CF_COMMENT'].Id" \
+            --output text)
+
+          if [ -n "$EXISTING_DIST_ID" ]; then
+            echo "Distribution exists: $EXISTING_DIST_ID"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "distribution_id=$EXISTING_DIST_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "Distribution does not exist"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create CloudFront distribution
+        if: steps.check_cf.outputs.exists == 'false'
+        id: create_cf
+        run: |
+          CF_DIST_ID=$(aws cloudfront create-distribution \
+            --distribution-config '{
+              "CallerReference": "GitHub-${{ github.sha }}",
+              "Origins": [
+                {
+                  "DomainName": "$BUCKET_NAME.s3.amazonaws.com",
+                  "Id": "S3-$BUCKET_NAME",
+                  "OriginAccessControlId": "${{ env.OAC_ID }}"
+                }
+              ],
+              "Enabled": true,
+              "DefaultRootObject": "index.html",
+              "DefaultCacheBehavior": {
+                "AllowedMethods": ["GET", "HEAD"],
+                "CachedMethods": ["GET", "HEAD"],
+                "TargetOriginId": "S3-$BUCKET_NAME",
+                "ViewerProtocolPolicy": "redirect-to-https",
+                "ForwardedValues": {
+                  "QueryString": false,
+                  "Cookies": { "Forward": "none" }
+                }
+              },
+              "ViewerCertificate": {
+                "CloudFrontDefaultCertificate": true
+              },
+              "Restrictions": {
+                "GeoRestriction": {
+                  "RestrictionType": "none"
+                }
+              }
+            }' \
+            --query 'Distribution.Id' --output text)
+          echo "CloudFront Distribution ID: $CF_DIST_ID"
+          echo "CF_DIST_ID=$CF_DIST_ID" >> $GITHUB_ENV
+
+      - name: Determine CloudFront ARN
+        id: cf_arn
+        run: |
+          if [ "${{ steps.check_cf.outputs.exists }}" == "true" ]; then
+            DIST_ID="${{ steps.check_cf.outputs.distribution_id }}"
+          else
+            DIST_ID="${{ steps.create_cf.outputs.distribution_id }}"
+          fi
+          DIST_ARN="arn:aws:cloudfront::${{ secrets.AWS_ACCOUNT_ID }}:distribution/$DIST_ID"
+          echo "distribution_arn=$DIST_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Apply S3 bucket policy to allow CloudFront access
+        run: |
+          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy "{
+            \"Version\": \"2008-10-17\",
+            \"Statement\": [{
+              \"Sid\": \"AllowCloudFrontServicePrincipal\",
+              \"Effect\": \"Allow\",
+              \"Principal\": {\"Service\": \"cloudfront.amazonaws.com\"},
+              \"Action\": \"s3:GetObject\",
+              \"Resource\": \"arn:aws:s3:::$BUCKET_NAME/*\",
+              \"Condition\": {
+                \"StringEquals\": {
+                  \"AWS:SourceArn\": \"${{ steps.cf_arn.outputs.distribution_arn }}\"
+                }
+              }
+            }]
+          }"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build React app
+        run: npm run build
+
+      - name: Upload build folder to S3
+        run: |
+          aws s3 sync build/ s3://$BUCKET_NAME/ --delete
