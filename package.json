@@ -6,9 +6,9 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/roboto": "^5.2.5",
-    "@mui/icons-material": "^6.4.8",
-    "@mui/material": "^6.4.8",
-    "@mui/styled-engine-sc": "^6.4.6",
+    "@mui/icons-material": "^7.0.1",
+    "@mui/material": "^7.0.1",
+    "@mui/styled-engine-sc": "^7.0.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -18,8 +18,7 @@
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.4.0",
     "resolve-url-loader": "^5.0.0",
-    "styled-components": "^6.1.16",
-    "web-vitals": "^2.1.4"
+    "styled-components": "^6.1.16"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",
@@ -33,7 +32,6 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "deploy": "npm run build && terraform -chdir=terraform/ apply -auto-approve && S3_BUCKET_NAME=$(terraform -chdir=terraform/ output -raw s3_bucket_name) && aws s3 sync ./build \"s3://$S3_BUCKET_NAME\" --delete && terraform -chdir=terraform/ output -raw cloudfront_distribution_url",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
