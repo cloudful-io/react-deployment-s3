@@ -11,10 +11,10 @@ jobs:
 
     env:
       AWS_REGION: us-east-1  # Change to your region
-      BUCKET_NAME: cloudful-react-deployment-s3v2
-      LOG_BUCKET: cloudful-react-deployment-s3v2-logs
-      CF_COMMENT: cloudful-react-deployment-s3v2
-      OAC_NAME: "cloudful-react-deployment-s3v2.s3.amazonaws.com"
+      BUCKET_NAME: cloudful-react-deployment-s3v3
+      LOG_BUCKET: cloudful-react-deployment-s3v3-logs
+      CF_COMMENT: cloudful-react-deployment-s3v3
+      OAC_NAME: "cloudful-react-deployment-s3v3.s3.amazonaws.com"
 
     steps:
       # Checkout code
@@ -197,7 +197,7 @@ jobs:
             }' \
             --query 'Distribution.Id' --output text)
           echo "CloudFront Distribution ID: $CF_DIST_ID"
-          echo "CF_DIST_ID=$CF_DIST_ID" >> $GITHUB_ENV
+          echo "distribution_id=$CF_DIST_ID" >> $GITHUB_OUTPUT
 
       - name: Determine CloudFront ARN
         id: cf_arn
