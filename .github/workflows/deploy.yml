@@ -159,7 +159,7 @@ jobs:
                     "OriginAccessControlId": "${{ env.OAC_ID }}",
                     "S3OriginConfig": {
                         "OriginAccessIdentity": ""
-                    },
+                    }
                   }
                 ]
               },
