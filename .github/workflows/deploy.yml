@@ -11,10 +11,10 @@ jobs:
 
     env:
       AWS_REGION: us-east-1  # Change to your region
-      BUCKET_NAME: cloudful-react-deployment-s3
-      LOG_BUCKET: cloudful-react-deployment-s3-logs
-      CF_COMMENT: cloudful-react-deployment-s3
-      OAC_NAME: "OAC-cloudful-react-deployment-s3"
+      BUCKET_NAME: cloudful-react-deployment-s3v2
+      LOG_BUCKET: cloudful-react-deployment-s3v2-logs
+      CF_COMMENT: cloudful-react-deployment-s3v2
+      OAC_NAME: "cloudful-react-deployment-s3v2.s3.amazonaws.com"
 
     steps:
       # Checkout code
@@ -103,7 +103,7 @@ jobs:
         id: check_oac_exists
         run: |
           OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='$OAC_NAME'].Id" --output text)
-          if [ "$OAC_ID" != "None" ]; then
+          if [ "$OAC_ID" != "" ]; then
             echo "Origin Access Control (OAC) ${OAC_NAME} exists."
             echo "oac_exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -159,10 +159,16 @@ jobs:
               "Enabled": true,
               "DefaultRootObject": "index.html",
               "DefaultCacheBehavior": {
-                "AllowedMethods": ["GET", "HEAD"],
-                "CachedMethods": ["GET", "HEAD"],
-                "TargetOriginId": "S3-$BUCKET_NAME",
+                "TargetOriginId": "S3-${{ env.BUCKET_NAME }}",
                 "ViewerProtocolPolicy": "redirect-to-https",
+                "AllowedMethods": {
+                  "Quantity": 2,
+                  "Items": ["GET", "HEAD"],
+                  "CachedMethods": {
+                    "Quantity": 2,
+                    "Items": ["GET", "HEAD"]
+                  }
+                },
                 "ForwardedValues": {
                   "QueryString": false,
                   "Cookies": { "Forward": "none" }
@@ -173,7 +179,8 @@ jobs:
               },
               "Restrictions": {
                 "GeoRestriction": {
-                  "RestrictionType": "none"
+                  "Quantity": 0,
+                  "Items": []
                 }
               }
             }' \
