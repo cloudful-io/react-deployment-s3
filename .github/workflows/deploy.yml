@@ -153,6 +153,8 @@ jobs:
                 "Quantity": 1,
                 "Items": [
                   {
+                    "DomainName": "${{ env.BUCKET_NAME }}.s3.amazonaws.com",
+                    "Id": "S3-${{ env.BUCKET_NAME }}",
                     "OriginAccessControlId": "${{ env.OAC_ID }}"
                   }
                 ]
