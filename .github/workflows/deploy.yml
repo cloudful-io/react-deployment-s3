@@ -179,7 +179,10 @@ jobs:
                 "ForwardedValues": {
                   "QueryString": false,
                   "Cookies": { "Forward": "none" }
-                }
+                },
+                "MinTTL": 0,
+                "MaxTTL": 0,
+                "DefaultTTL": 0
               },
               "ViewerCertificate": {
                 "CloudFrontDefaultCertificate": true
