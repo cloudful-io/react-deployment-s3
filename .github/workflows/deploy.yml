@@ -150,16 +150,6 @@ jobs:
             --distribution-config '{
               "CallerReference": "GitHub-${{ github.sha }}",
               "Comment": "${{ env.CF_COMMENT }}",
-              "Origins": {
-                "Quantity": 1,
-                "Items": [
-                  {
-                    "DomainName": "${{ env.OAC_NAME }}",
-                    "Id": "S3-${{ env.BUCKET_NAME }}",
-                    "OriginAccessControlId": "${{ env.OAC_ID }}"
-                  }
-                ]
-              },
               "Enabled": true,
               "DefaultRootObject": "index.html",
               "DefaultCacheBehavior": {
