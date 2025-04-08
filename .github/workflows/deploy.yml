@@ -158,7 +158,7 @@ jobs:
                     "OriginAccessControlId": "${{ env.OAC_ID }}"
                   }
                 ]
-              }
+              },
               "Enabled": true,
               "DefaultRootObject": "index.html",
               "DefaultCacheBehavior": {
