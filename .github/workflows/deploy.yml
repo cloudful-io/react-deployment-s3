@@ -148,7 +148,7 @@ jobs:
           CF_DIST_ID=$(aws cloudfront create-distribution \
             --distribution-config '{
               "CallerReference": "GitHub-${{ github.sha }}",
-              "Comment": "${{ env.CF_COMMENT }}"
+              "Comment": "${{ env.CF_COMMENT }}",
               "Origins": [
                 {
                   "DomainName": "${{ env.BUCKET_NAME }}.s3.amazonaws.com",
