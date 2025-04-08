@@ -105,6 +105,7 @@ jobs:
           if [ "$OAC_ID" != "" ]; then
             echo "Origin Access Control (OAC) ${OAC_NAME} exists."
             echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "OAC_ID=$OAC_ID" >> $GITHUB_ENV
           else
             echo "Origin Access Control (OAC) does not exist."
             echo "exists=false" >> "$GITHUB_OUTPUT"
