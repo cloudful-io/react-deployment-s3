@@ -149,13 +149,16 @@ jobs:
             --distribution-config '{
               "CallerReference": "GitHub-${{ github.sha }}",
               "Comment": "${{ env.CF_COMMENT }}",
-              "Origins": [
-                {
-                  "DomainName": "${{ env.BUCKET_NAME }}.s3.amazonaws.com",
-                  "Id": "S3-${{ env.BUCKET_NAME }}",
-                  "OriginAccessControlId": "${{ env.OAC_ID }}"
-                }
-              ],
+              "Origins": {
+                "Quantity": 1,
+                "Items": [
+                  {
+                    "DomainName": "${{ env.BUCKET_NAME }}.s3.amazonaws.com",
+                    "Id": "S3-${{ env.BUCKET_NAME }}",
+                    "OriginAccessControlId": "${{ env.OAC_ID }}"
+                  }
+                ]
+              }
               "Enabled": true,
               "DefaultRootObject": "index.html",
               "DefaultCacheBehavior": {
