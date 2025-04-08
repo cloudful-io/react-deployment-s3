@@ -33,7 +33,7 @@ jobs:
       - name: Check if S3 logging bucket exists
         id: check_log_bucket
         run: |
-          if aws s3api head-bucket --bucket "$LOG_BUCKET" 2>/dev/null; then
+          if aws s3api head-bucket --bucket "${{ env.LOG_BUCKET }}" 2>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -42,24 +42,24 @@ jobs:
       - name: Create logging bucket
         if: steps.check_log_bucket.outputs.exists == 'false'
         run: |
-          aws s3api create-bucket --bucket "$LOG_BUCKET" --region us-east-1
-          aws s3api put-public-access-block --bucket "$LOG_BUCKET" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          aws s3api create-bucket --bucket "${{ env.LOG_BUCKET }}" --region us-east-1
+          aws s3api put-public-access-block --bucket "${{ env.LOG_BUCKET }}" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 
       - name: Set bucket policy on logging bucket
         run: |
-          aws s3api put-bucket-policy --bucket "$LOG_BUCKET" --policy "{
+          aws s3api put-bucket-policy --bucket "${{ env.LOG_BUCKET }}" --policy "{
             \"Version\": \"2012-10-17\",
             \"Statement\": [{
               \"Effect\": \"Allow\",
               \"Principal\": {\"Service\": \"s3.amazonaws.com\"},
               \"Action\": \"s3:PutObject\",
-              \"Resource\": \"arn:aws:s3:::$LOG_BUCKET/*\",
+              \"Resource\": \"arn:aws:s3:::${{ env.LOG_BUCKET }}/*\",
               \"Condition\": {
                 \"StringEquals\": {
                   \"aws:SourceAccount\": \"${{ secrets.AWS_ACCOUNT_ID }}\"
                 },
                 \"ArnLike\": {
-                  \"aws:SourceArn\": \"arn:aws:s3:::$BUCKET_NAME\"
+                  \"aws:SourceArn\": \"arn:aws:s3:::${{ env.BUCKET_NAME }}\"
                 }
               }
             }]
@@ -68,7 +68,7 @@ jobs:
       - name: Check if S3 bucket exists
         id: check_bucket
         run: |
-          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+          if aws s3api head-bucket --bucket "${{ env.BUCKET_NAME }}" 2>/dev/null; then
             echo "Bucket exists"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -80,14 +80,14 @@ jobs:
         if: steps.check_bucket.outputs.exists == 'false'
         run: |
           aws s3api create-bucket \
-            --bucket "$BUCKET_NAME" \
-            --region $AWS_REGION \
+            --bucket "${{ env.BUCKET_NAME }}" \
+            --region ${{ env.AWS_REGION }} \
             --object-lock-enabled-for-bucket
-          aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
-          aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          aws s3api put-bucket-versioning --bucket "${{ env.BUCKET_NAME }}" --versioning-configuration Status=Enabled
+          aws s3api put-bucket-encryption --bucket "${{ env.BUCKET_NAME }}" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          aws s3api put-public-access-block --bucket "${{ env.BUCKET_NAME }}" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
           aws s3api put-object-lock-configuration \
-            --bucket "$BUCKET_NAME" \
+            --bucket "${{ env.BUCKET_NAME }}" \
             --object-lock-configuration '{
               "ObjectLockEnabled": "Enabled",
               "Rule": {
@@ -101,7 +101,7 @@ jobs:
       - name: Check if OAC exists
         id: check_oac_exists
         run: |
-          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='$OAC_NAME'].Id" --output text)
+          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='${{ env.OAC_NAME }}'].Id" --output text)
           if [ "$OAC_ID" != "" ]; then
             echo "Origin Access Control (OAC) ${OAC_NAME} exists."
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -116,7 +116,7 @@ jobs:
         run: |
           OAC_ID=$(aws cloudfront create-origin-access-control \
             --origin-access-control-config '{
-              "Name": "$OAC_NAME",
+              "Name": "${{ env.OAC_NAME }}",
               "OriginAccessControlOriginType": "s3",
               "SigningBehavior": "always",
               "SigningProtocol": "sigv4"
@@ -129,7 +129,7 @@ jobs:
         id: check_cf
         run: |
           EXISTING_DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='$CF_COMMENT'].Id" \
+            --query "DistributionList.Items[?Comment=='${{ env.CF_COMMENT }}'].Id" \
             --output text)
 
           if [ -n "$EXISTING_DIST_ID" ]; then
@@ -150,8 +150,8 @@ jobs:
               "CallerReference": "GitHub-${{ github.sha }}",
               "Origins": [
                 {
-                  "DomainName": "$BUCKET_NAME.s3.amazonaws.com",
-                  "Id": "S3-$BUCKET_NAME",
+                  "DomainName": "${{ env.BUCKET_NAME }}.s3.amazonaws.com",
+                  "Id": "S3-${{ env.BUCKET_NAME }}",
                   "OriginAccessControlId": "${{ env.OAC_ID }}"
                 }
               ],
@@ -200,14 +200,14 @@ jobs:
 
       - name: Apply S3 bucket policy to allow CloudFront access
         run: |
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy "{
+          aws s3api put-bucket-policy --bucket "${{ env.BUCKET_NAME }}" --policy "{
             \"Version\": \"2008-10-17\",
             \"Statement\": [{
               \"Sid\": \"AllowCloudFrontServicePrincipal\",
               \"Effect\": \"Allow\",
               \"Principal\": {\"Service\": \"cloudfront.amazonaws.com\"},
               \"Action\": \"s3:GetObject\",
-              \"Resource\": \"arn:aws:s3:::$BUCKET_NAME/*\",
+              \"Resource\": \"arn:aws:s3:::${{ env.BUCKET_NAME }}/*\",
               \"Condition\": {
                 \"StringEquals\": {
                   \"AWS:SourceArn\": \"${{ steps.cf_arn.outputs.distribution_arn }}\"
@@ -229,4 +229,4 @@ jobs:
 
       - name: Upload build folder to S3
         run: |
-          aws s3 sync build/ s3://$BUCKET_NAME/ --delete
+          aws s3 sync build/ s3://${{ env.BUCKET_NAME }}/ --delete
