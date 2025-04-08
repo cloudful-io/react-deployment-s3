@@ -104,10 +104,10 @@ jobs:
           OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='$OAC_NAME'].Id" --output text)
           if [ "$OAC_ID" != "" ]; then
             echo "Origin Access Control (OAC) ${OAC_NAME} exists."
-            echo "oac_exists=true" >> "$GITHUB_OUTPUT"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Origin Access Control (OAC) does not exist."
-            echo "oac_exists=false" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create CloudFront OAC if it doesn't exist
